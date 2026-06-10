@@ -110,6 +110,27 @@ Output Qdrant local:
 data/preprocessed/qdrant/
 ```
 
+## Bước 3 — Generation (RAG answer)
+
+Cần `OPENROUTER_API_KEY` trong `.env` ở root project (cùng file với Qdrant).
+
+```cmd
+cd retrieval
+pip install -r requirements.txt
+python ask.py "Hội đồng nhân dân Hà Nội có thẩm quyền gì về đầu tư công"
+python ask.py "điều kiện cấp chứng chỉ thẩm tra viên" --as-of 2025-06-01 --top 5
+python ask.py "..." --document-number "02/2026/QH16" --model openai/gpt-4o-mini --json
+python ask.py "..." --no-sources
+```
+
+Luồng: hybrid search top-k → format context → OpenRouter LLM → câu trả lời tiếng Việt kèm trích dẫn.
+
+Mặc định model: `openai/gpt-4o-mini`. Chỉ dùng context đã truy xuất; nếu thiếu căn cứ sẽ nói rõ.
+
+## Web demo
+
+Giao diện chat và API nằm ở `frontend/` và `backend/` (ngoài thư mục `retrieval/`). Xem hướng dẫn chạy tại `backend/main.py` hoặc README project.
+
 ## Pipeline tổng thể (đã chốt)
 
 ```text
@@ -118,11 +139,15 @@ passages.jsonl
 chunks.jsonl
     ↓  index_chunks.py
 Qdrant (dense + sparse)
-    ↓  query_chunks.py
+    ↓  query_chunks.py / ask.py / backend
 Query
   ├─ Metadata filter: effective_from, effective_to, document_number
   ├─ BM25/keyword
   └─ Dense semantic
          ↓
-  top 5
+  top K chunks
+         ↓  ask.py / backend (OpenRouter)
+  Câu trả lời tổng hợp
+         ↓  frontend
+  Giao diện chat HTML
 ```
