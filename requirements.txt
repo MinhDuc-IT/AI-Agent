@@ -1,0 +1,11 @@
+# Parser
+python-docx
+mammoth
+beautifulsoup4
+pywin32; platform_system == "Windows"
+
+# RAG / Qdrant indexing and retrieval
+qdrant-client>=1.12.0
+sentence-transformers>=3.0.0
+fastembed>=0.4.0
+torch
