@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from legal_indexer.env import load_dotenv_file
+from legal_rag.env import load_dotenv_file
 
 OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
 

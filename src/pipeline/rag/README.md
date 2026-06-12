@@ -21,6 +21,7 @@ src/pipeline/rag/
   index_chunks.py        # CLI index chunks vao Qdrant
   query_chunks.py        # CLI retrieve, giu tuong thich ten cu
   retrieve.py            # CLI retrieve ten moi
+  ask.py                 # CLI RAG (retrieve + OpenRouter)
   legal_rag/
     config.py            # config dataclass
     env.py               # doc .env
@@ -31,6 +32,12 @@ src/pipeline/rag/
     retriever.py         # dense/sparse/hybrid retrieval
     cli_index.py
     cli_retrieve.py
+  legal_generator/
+    config.py            # OpenRouter / LLM config
+    generator.py         # LegalQAGenerator (ask + ask_stream)
+    client.py            # OpenRouter client
+    prompt.py            # system prompt + context format
+    cli_ask.py
 ```
 
 ## Embedding
@@ -107,3 +114,32 @@ Filter theo hieu luc:
 ```powershell
 & 'D:\Users\ADMIN\miniconda3\envs\py3.10\python.exe' src\pipeline\rag\retrieve.py "xu phat nguoi dieu khien xe" --as-of 2025-01-01 --mode sparse
 ```
+
+## Ask (RAG)
+
+Can hoi tra loi bang OpenRouter sau khi retrieve:
+
+```powershell
+$env:PYTHONPATH="src\pipeline\rag"
+& 'D:\Users\ADMIN\miniconda3\envs\py3.10\python.exe' src\pipeline\rag\ask.py "Hoi dong nhan dan Ha Noi co tham quyen gi ve dau tu cong"
+```
+
+Can `.env` o root project:
+
+```env
+QDRANT_URL=...
+QDRANT_API_KEY=...
+OPENROUTER_API_KEY=...
+```
+
+## Web (ai-service + backend + frontend)
+
+```powershell
+cd ai-service; pip install -r requirements.txt; python main.py
+cd backend; pip install -r requirements.txt; python main.py
+cd frontend; python serve.py
+```
+
+- AI service: `http://127.0.0.1:8001` (RAG + SSE)
+- Backend BFF: `http://127.0.0.1:8000` (proxy)
+- Frontend: `http://127.0.0.1:5173`

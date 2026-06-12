@@ -91,6 +91,72 @@ Output effectivity:
 
 `effectivity_units.json` chứa hiệu lực riêng cho điều/khoản/điểm khi văn bản có quy định riêng.
 
+## Chạy Web (3 service)
+
+Giao diện chat tra cứu pháp luật gồm 3 service chạy song song:
+
+```text
+Frontend :5173  →  Backend :8000 (BFF proxy)  →  AI Service :8001 (RAG + SSE)
+```
+
+| Service | Thư mục | Port | Vai trò |
+|---------|---------|------|---------|
+| AI service | `ai-service/` | 8001 | Retrieve chunks (Qdrant) + sinh câu trả lời (OpenRouter), SSE streaming |
+| Backend | `backend/` | 8000 | Proxy HTTP/SSE tới AI service |
+| Frontend | `frontend/` | 5173 | Giao diện chat, gọi API qua backend |
+
+### Biến môi trường
+
+Tạo file `.env` ở root project:
+
+```env
+QDRANT_URL=https://<cluster>.cloud.qdrant.io
+QDRANT_API_KEY=<api-key>
+OPENROUTER_API_KEY=<api-key>
+```
+
+Tùy chọn (backend dùng khi proxy):
+
+```env
+AI_SERVICE_URL=http://127.0.0.1:8001
+```
+
+### Khởi động (3 terminal)
+
+**Terminal 1 — AI service** (lần đầu load embedder có thể mất ~30–60 giây):
+
+```powershell
+cd ai-service
+pip install -r requirements.txt
+python main.py
+```
+
+**Terminal 2 — Backend:**
+
+```powershell
+cd backend
+pip install -r requirements.txt
+python main.py
+```
+
+**Terminal 3 — Frontend:**
+
+```powershell
+cd frontend
+python serve.py
+```
+
+Mở trình duyệt: http://127.0.0.1:5173
+
+Frontend mặc định gọi backend tại `http://127.0.0.1:8000` (cấu hình trong `frontend/config.js`). Kiểm tra health:
+
+```powershell
+curl http://127.0.0.1:8001/api/health
+curl http://127.0.0.1:8000/api/health
+```
+
+Chi tiết index/retrieve/CLI RAG: xem `src/pipeline/rag/README.md`.
+
 ## Lưu Ý
 
 Parser không ghi thông tin cho embedding, reference resolving, amendment graph hay flat table index. Effectivity không ghi event log/CSV trung gian; chỉ ghi thông tin hiệu lực chung và riêng.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, Iterator, List
 
 from openai import OpenAI
 
@@ -25,3 +25,16 @@ class OpenRouterClient:
         )
         content = response.choices[0].message.content
         return (content or "").strip()
+
+    def stream(self, messages: List[Dict[str, str]]) -> Iterator[str]:
+        response = self._client.chat.completions.create(
+            model=self.config.model,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
+            messages=messages,
+            stream=True,
+        )
+        for chunk in response:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
