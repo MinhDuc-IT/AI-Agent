@@ -79,6 +79,7 @@ class AttachmentParserBase:
         local_id: str,
         path_parts: List[str],
         content: str,
+        label: Optional[str] = None,
         parent_id: Optional[str] = None,
         order: int = 0,
         structured_fields: Optional[Dict[str, Any]] = None,
@@ -96,6 +97,8 @@ class AttachmentParserBase:
             "content": content,
             "structured_fields": structured_fields or {},
         }
+        if label:
+            row["label"] = label
         return row
 
     def extract_tables(self, metadata: Dict[str, Any], docx_path: Union[str, Path]) -> List[Dict[str, Any]]:
@@ -172,6 +175,7 @@ class AttachmentParserBase:
             node = {
                 "id": node_id,
                 "type": unit_type,
+                "label": unit.get("label") or "",
                 "content": unit.get("content") or "",
                 "order": unit.get("order", 0),
                 "path_text": unit.get("path_text") or "",

@@ -82,10 +82,20 @@ def chat(body: ChatRequest) -> ChatResponse:
 
     state = get_app_state()
     try:
-        result = state.generator.ask(
+        sources = state.retriever.search(
             message,
             as_of_date=body.as_of,
             document_number=body.document_number,
+            top_k=body.top_k,
+        )
+        result = state.answer_agent.answer(
+            message,
+            sources,
+            model=state.model,
+            temperature=state.temperature,
+            max_tokens=state.max_tokens,
+            document_number=body.document_number,
+            as_of_date=body.as_of,
             top_k=body.top_k,
         )
     except FileNotFoundError as exc:
@@ -97,12 +107,12 @@ def chat(body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý: {exc}") from exc
 
     return ChatResponse(
-        query=result["query"],
-        answer=result["answer"],
-        sources=[source_from_dict(row) for row in result.get("sources", [])],
-        model=result.get("model") or state.model,
-        as_of=result.get("as_of"),
-        document_number=result.get("document_number"),
+        query=message,
+        answer=result.answer,
+        sources=[source_from_dict(row) for row in result.contexts],
+        model=result.model or state.model,
+        as_of=body.as_of,
+        document_number=body.document_number,
     )
 
 
@@ -116,13 +126,37 @@ def chat_stream(body: ChatRequest) -> StreamingResponse:
 
     def event_stream():
         try:
-            for event in state.generator.ask_stream(
+            sources = state.retriever.search(
                 message,
                 as_of_date=body.as_of,
                 document_number=body.document_number,
                 top_k=body.top_k,
-            ):
-                yield encode_sse(event)
+            )
+            result = state.answer_agent.answer(
+                message,
+                sources,
+                model=state.model,
+                temperature=state.temperature,
+                max_tokens=state.max_tokens,
+                document_number=body.document_number,
+                as_of_date=body.as_of,
+                top_k=body.top_k,
+            )
+            yield encode_sse({
+                "type": "sources",
+                "query": message,
+                "sources": result.contexts,
+                "as_of": body.as_of,
+                "document_number": body.document_number,
+                "model": state.model,
+            })
+            if result.answer:
+                yield encode_sse({"type": "token", "content": result.answer})
+            yield encode_sse({
+                "type": "done",
+                "answer": result.answer,
+                "model": result.model or state.model,
+            })
         except FileNotFoundError as exc:
             yield encode_sse_error(str(exc))
         except ValueError as exc:

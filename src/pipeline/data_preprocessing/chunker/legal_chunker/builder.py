@@ -26,6 +26,15 @@ ARTICLE_TYPE = "dieu"
 CLAUSE_TYPE = "khoan"
 POINT_TYPE = "diem"
 TABLE_TYPES = {"table", "appendix_table", "form_table", "table_row"}
+ATTACHMENT_BOUNDARY_TYPES = {
+    "appendix_internal_appendix",
+    "appendix_part",
+    "appendix_chapter",
+    "appendix_article",
+    "appendix_section_alpha",
+    "appendix_section_roman",
+}
+ATTACHMENT_CONTAINER_TYPES = ATTACHMENT_BOUNDARY_TYPES | {"appendix_item_decimal"}
 
 
 class EffectivityResolver:
@@ -415,9 +424,19 @@ class LegalChunkBuilder:
             pending.clear()
 
         for node in nodes:
+            if pending and attachment_mode and (
+                self._is_attachment_boundary_node(node)
+                or self._starts_new_decimal_family(pending, node)
+            ):
+                flush_pending()
             if self._is_table_node(node):
                 flush_pending()
                 chunks.extend(self._chunk_table_node(node, context, prefix_nodes=prefix_nodes))
+                continue
+            if attachment_mode and self._should_descend_attachment_container(node):
+                flush_pending()
+                child_prefix = prefix_nodes + [self._shallow_node(node)]
+                chunks.extend(self._chunk_node_sequence(node.get("children") or [], context, prefix_nodes=child_prefix, attachment_mode=attachment_mode))
                 continue
             node_text = self._render_subtree(node, skip_nested_articles=True)
             projected = self._join_lines([
@@ -671,6 +690,8 @@ class LegalChunkBuilder:
         node_type = node.get("type")
         label = collapse_ws(node.get("label") or "")
         content = collapse_ws(node.get("content") or "")
+        if not label:
+            label = LegalChunkBuilder._label_from_structured_fields(node_type, node, content)
         if node_type in {"text", "appendix_paragraph", "form_text"}:
             return content
         if label and content and content.casefold() in label.casefold():
@@ -680,6 +701,28 @@ class LegalChunkBuilder:
                 return f"{label}:\n{content}"
             return label
         return label or content
+
+    @staticmethod
+    def _label_from_structured_fields(node_type: str, node: Dict[str, Any], content: str) -> str:
+        fields = node.get("structured_fields") or {}
+        no = collapse_ws(str(fields.get("no") or ""))
+        if not no or not content:
+            return ""
+        if node_type == "appendix_internal_appendix":
+            return f"Phụ lục {no}: {content}"
+        if node_type == "appendix_part":
+            return f"PHẦN {no}: {content}"
+        if node_type == "appendix_chapter":
+            return f"CHƯƠNG {no}. {content}"
+        if node_type == "appendix_article":
+            return f"Điều {no}. {content}"
+        if node_type in {"appendix_section_alpha", "appendix_section_roman", "appendix_item_decimal"}:
+            return f"{no}. {content}"
+        if node_type == "appendix_point":
+            return f"{no}) {content}"
+        if node_type == "appendix_bullet":
+            return f"- {content}"
+        return ""
 
     def _render_table_preview(self, node: Dict[str, Any]) -> str:
         rows = self._table_rows(node)
@@ -739,6 +782,55 @@ class LegalChunkBuilder:
     def _is_table_node(node: Dict[str, Any]) -> bool:
         node_type = node.get("type")
         return node_type in TABLE_TYPES or "normalized_rows" in node or bool((node.get("table") or {}).get("normalized_rows"))
+
+    @staticmethod
+    def _is_attachment_boundary_node(node: Dict[str, Any]) -> bool:
+        node_type = node.get("type")
+        if node_type in ATTACHMENT_BOUNDARY_TYPES:
+            return True
+        if node_type != "appendix_item_decimal":
+            return False
+        no = collapse_ws(str((node.get("structured_fields") or {}).get("no") or ""))
+        return bool(no and "." not in no)
+
+    @staticmethod
+    def _should_descend_attachment_container(node: Dict[str, Any]) -> bool:
+        return bool(node.get("children")) and node.get("type") in ATTACHMENT_CONTAINER_TYPES
+
+    @staticmethod
+    def _starts_new_decimal_family(pending: List[Dict[str, Any]], node: Dict[str, Any]) -> bool:
+        current_no = LegalChunkBuilder._decimal_no(node)
+        if not current_no or "." not in current_no:
+            return False
+
+        previous_no = ""
+        for item in reversed(pending):
+            previous_no = LegalChunkBuilder._decimal_no(item)
+            if previous_no:
+                break
+        if not previous_no:
+            return False
+
+        if current_no.startswith(previous_no + ".") or previous_no.startswith(current_no + "."):
+            return False
+
+        current_parent = LegalChunkBuilder._decimal_parent_no(current_no)
+        previous_parent = LegalChunkBuilder._decimal_parent_no(previous_no)
+        if current_parent and current_parent == previous_parent:
+            return False
+        if current_parent == previous_no or previous_parent == current_no:
+            return False
+        return True
+
+    @staticmethod
+    def _decimal_no(node: Dict[str, Any]) -> str:
+        if node.get("type") != "appendix_item_decimal":
+            return ""
+        return collapse_ws(str((node.get("structured_fields") or {}).get("no") or ""))
+
+    @staticmethod
+    def _decimal_parent_no(no: str) -> str:
+        return no.rsplit(".", 1)[0] if "." in no else ""
 
     @staticmethod
     def _table_rows(node: Dict[str, Any]) -> List[List[str]]:

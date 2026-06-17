@@ -4,21 +4,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from .retrieval_path import DEFAULT_QDRANT_PATH, setup_retrieval_path
+from .retrieval_path import DEFAULT_QDRANT_PATH, setup_pipeline_path
 
-setup_retrieval_path()
+setup_pipeline_path()
 
-from legal_generator.config import GeneratorConfig  # noqa: E402
-from legal_generator.generator import LegalQAGenerator  # noqa: E402
-from legal_rag.config import RetrieveConfig  # noqa: E402
-from legal_rag.qdrant_settings import apply_qdrant_settings, qdrant_target_label  # noqa: E402
+from src.pipeline.agents.answer_agent import AnswerAgent  # noqa: E402
+from src.pipeline.rag.legal_rag.config import RetrieveConfig  # noqa: E402
+from src.pipeline.rag.legal_rag.qdrant_settings import apply_qdrant_settings, qdrant_target_label  # noqa: E402
+from src.pipeline.rag.legal_rag.retriever import ChunkRetriever  # noqa: E402
 
 
 @dataclass
 class AppState:
-    generator: LegalQAGenerator
+    retriever: ChunkRetriever
+    answer_agent: AnswerAgent
     qdrant_target: str
     model: str
+    max_tokens: int
+    temperature: float
 
 
 @dataclass
@@ -58,14 +61,13 @@ def build_app_state(config: ServiceConfig) -> AppState:
         qdrant_api_key=config.qdrant_api_key,
         use_local=config.use_local_qdrant,
     )
-    generator_config = GeneratorConfig(
+    retriever = ChunkRetriever(retriever_config)
+    answer_agent = AnswerAgent()
+    return AppState(
+        retriever=retriever,
+        answer_agent=answer_agent,
+        qdrant_target=qdrant_target_label(retriever_config),
         model=config.llm_model,
         max_tokens=config.max_tokens,
         temperature=config.temperature,
-    )
-    generator = LegalQAGenerator(retriever_config, generator_config)
-    return AppState(
-        generator=generator,
-        qdrant_target=qdrant_target_label(retriever_config),
-        model=generator_config.model,
     )

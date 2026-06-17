@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
-from src.pipeline.core.llm import OpenRouterLLM
-from src.pipeline.prompts.answer import ANSWER_SYSTEM_PROMPT, build_answer_user_prompt
+from .context_filter import AnswerContextFilter, filter_contexts
+from ..core.llm import OpenRouterLLM
+from ..prompts.answer import ANSWER_SYSTEM_PROMPT, build_answer_user_prompt
 
 
 @dataclass
@@ -26,8 +27,22 @@ class AnswerAgent:
         model: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        context_filter: Optional[AnswerContextFilter] = None,
+        document_number: Optional[str] = None,
+        as_of_date: Optional[str] = None,
+        top_k: Optional[int] = None,
+        min_score: Optional[float] = None,
+        mode: Optional[str] = None,
     ) -> AnswerResult:
-        context_rows = list(contexts or [])
+        context_rows = filter_contexts(
+            contexts or [],
+            context_filter,
+            document_number=document_number,
+            as_of_date=as_of_date,
+            top_k=top_k,
+            min_score=min_score,
+            mode=mode,
+        )
         response = self.llm.complete(
             system_prompt=ANSWER_SYSTEM_PROMPT,
             user_prompt=build_answer_user_prompt(question, context_rows),

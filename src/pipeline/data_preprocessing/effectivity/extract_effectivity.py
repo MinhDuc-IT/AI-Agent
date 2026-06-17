@@ -1,10 +1,13 @@
-try:
-    from pipeline.data_preprocessing.effectivity.legal_effectivity.cli import main
-except ModuleNotFoundError:
-    try:
-        from src.pipeline.data_preprocessing.effectivity.legal_effectivity.cli import main
-    except ModuleNotFoundError:
-        from legal_effectivity.cli import main
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.pipeline.data_preprocessing.effectivity.legal_effectivity.cli import main
 
 if __name__ == "__main__":
     main()
