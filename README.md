@@ -1,129 +1,92 @@
 # AI Agent
 
-Pipeline hiện tại chỉ giữ phần tiền xử lý cần thiết cho văn bản pháp luật:
+Repo nay chia engine AI thanh 3 phan ro rang:
 
-- `src/agent/data_preprocessing/parser`: parse file `.doc`/`.docx` thành cây JSON và `units.jsonl` tối thiểu.
-- `src/agent/data_preprocessing/effectivity`: đọc thông tin hiệu lực chung/rieng từ `units.jsonl`.
+- `src/pipeline/data_preprocessing`: parse, extract effectivity, build chunks.
+- `src/pipeline/rag`: embedding, Qdrant index va retrieve chunks.
+- `src/pipeline/agents`, `src/pipeline/core`, `src/pipeline/prompts`: sinh cau tra loi tu question va retrieved contexts.
 
-Thư mục dữ liệu mặc định:
+`rag` khong chua code goi LLM. Neu can hoi-dap end-to-end, service/orchestrator se goi `rag` truoc, sau do goi `AnswerAgent`.
 
-- Input: `data/dataset`
-- Output parser: `data/preprocessed/parsed`
-- Output effectivity: `data/preprocessed/effectivity`
+## Moi Truong
 
-## Môi Trường
+Dung Python 3.10.
 
-Dùng Python 3.10. Trên máy hiện tại:
-
-```powershell
-D:\Users\ADMIN\miniconda3\envs\py3.10\python.exe --version
-```
-
-Nếu chạy bằng package import, thêm `src` vào `PYTHONPATH`:
+Neu chay bang package import, them root project hoac `src` vao `PYTHONPATH` tuy cach chay:
 
 ```powershell
 $env:PYTHONPATH="src"
 ```
 
-## Chạy Parser
+## Data Preprocessing
 
-Parse toàn bộ dataset package:
+Parse dataset package:
 
 ```powershell
-& "D:\Users\ADMIN\miniconda3\envs\py3.10\python.exe" `
-  src\agent\data_preprocessing\parser\parse_package.py `
+python src\pipeline\data_preprocessing\parser\parse_package.py `
   --input data\dataset `
   --output data\preprocessed\parsed `
   --no-convert-doc
 ```
 
-Mỗi package output gồm:
-
-- `package_inventory.json`
-- `main/tree.json`
-- `main/units.jsonl`
-- `attachments/<attachment>/tree.json`
-- `attachments/<attachment>/attachment.json`
-
-`units.jsonl` chỉ giữ field tối thiểu cho effectivity:
-
-```json
-{
-  "id": "...",
-  "document_id": "...",
-  "document_number": "...",
-  "issue_date": "...",
-  "type": "...",
-  "path_text": "...",
-  "content": "..."
-}
-```
-
-## Chạy Effectivity
-
-Sau khi parser tạo `main/units.jsonl`, chạy:
+Extract effectivity:
 
 ```powershell
-& "D:\Users\ADMIN\miniconda3\envs\py3.10\python.exe" `
-  src\agent\data_preprocessing\effectivity\extract_effectivity.py `
+python src\pipeline\data_preprocessing\effectivity\extract_effectivity.py `
   --input data\preprocessed\parsed `
   --output data\preprocessed\effectivity
 ```
 
-Output effectivity:
+Build chunks:
 
-- `data/preprocessed/effectivity/<package>/effectivity.json`
-- `data/preprocessed/effectivity/effectivity_general.json`
-- `data/preprocessed/effectivity/effectivity_units.json`
-
-`effectivity_general.json` chứa hiệu lực chung của văn bản:
-
-```json
-{
-  "document_id": "...",
-  "document_number": "...",
-  "effective_from": "YYYY-MM-DD",
-  "effective_to": null,
-  "effective_to_source_document_number": null,
-  "in_corpus": true
-}
+```powershell
+python src\pipeline\data_preprocessing\chunker\chunk_dataset.py `
+  --input data\preprocessed\parsed `
+  --effectivity data\preprocessed\effectivity `
+  --output data\preprocessed\chunks
 ```
 
-`effectivity_units.json` chứa hiệu lực riêng cho điều/khoản/điểm khi văn bản có quy định riêng.
+## RAG
 
-## Chạy Web (3 service)
+Index chunks vao Qdrant:
 
-Giao diện chat tra cứu pháp luật gồm 3 service chạy song song:
-
-```text
-Frontend :5173  →  Backend :8000 (BFF proxy)  →  AI Service :8001 (RAG + SSE)
+```powershell
+python src\pipeline\rag\index_chunks.py --recreate
 ```
 
-| Service | Thư mục | Port | Vai trò |
-|---------|---------|------|---------|
-| AI service | `ai-service/` | 8001 | Retrieve chunks (Qdrant) + sinh câu trả lời (OpenRouter), SSE streaming |
-| Backend | `backend/` | 8000 | Proxy HTTP/SSE tới AI service |
-| Frontend | `frontend/` | 5173 | Giao diện chat, gọi API qua backend |
+Retrieve chunks:
 
-### Biến môi trường
+```powershell
+python src\pipeline\rag\retrieve.py "dieu kien cap giay phep lai xe" --mode hybrid --top 5
+```
 
-Tạo file `.env` ở root project:
+Chi tiet: `src/pipeline/rag/README.md`.
+
+## Answer Agent
+
+`AnswerAgent` nhan question va contexts da retrieve, sau do goi LLM qua `src/pipeline/core/llm.py`.
+
+```powershell
+python src\pipeline\agents\answer.py "Cau hoi phap ly" --contexts retrieved_contexts.jsonl
+```
+
+Can `.env` o root project neu goi OpenRouter:
 
 ```env
+OPENROUTER_API_KEY=<api-key>
 QDRANT_URL=https://<cluster>.cloud.qdrant.io
 QDRANT_API_KEY=<api-key>
-OPENROUTER_API_KEY=<api-key>
 ```
 
-Tùy chọn (backend dùng khi proxy):
+## Web Services
 
-```env
-AI_SERVICE_URL=http://127.0.0.1:8001
+Web layer hien co 3 service:
+
+```text
+Frontend :5173 -> Backend :8000 -> AI Service :8001
 ```
 
-### Khởi động (3 terminal)
-
-**Terminal 1 — AI service** (lần đầu load embedder có thể mất ~30–60 giây):
+AI service dung pipeline dung: `ChunkRetriever` de retrieve, sau do `AnswerAgent` de sinh cau tra loi.
 
 ```powershell
 cd ai-service
@@ -131,32 +94,13 @@ pip install -r requirements.txt
 python main.py
 ```
 
-**Terminal 2 — Backend:**
-
 ```powershell
 cd backend
 pip install -r requirements.txt
 python main.py
 ```
 
-**Terminal 3 — Frontend:**
-
 ```powershell
 cd frontend
 python serve.py
 ```
-
-Mở trình duyệt: http://127.0.0.1:5173
-
-Frontend mặc định gọi backend tại `http://127.0.0.1:8000` (cấu hình trong `frontend/config.js`). Kiểm tra health:
-
-```powershell
-curl http://127.0.0.1:8001/api/health
-curl http://127.0.0.1:8000/api/health
-```
-
-Chi tiết index/retrieve/CLI RAG: xem `src/pipeline/rag/README.md`.
-
-## Lưu Ý
-
-Parser không ghi thông tin cho embedding, reference resolving, amendment graph hay flat table index. Effectivity không ghi event log/CSV trung gian; chỉ ghi thông tin hiệu lực chung và riêng.
