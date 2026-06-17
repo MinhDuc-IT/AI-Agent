@@ -23,9 +23,18 @@ const searchInput = document.getElementById("search-input");
 const sidebarSearch = document.getElementById("sidebar-search");
 
 const QUICK_ACTIONS = [
-  { label: "Thẩm quyền đầu tư Thủ đô", query: "Hội đồng nhân dân Hà Nội có thẩm quyền gì về đầu tư công?" },
-  { label: "Kiểm tra ô tô nhập khẩu", query: "Ô tô nhập khẩu phải kiểm tra những gì về đèn phanh?" },
-  { label: "Chứng chỉ thẩm tra viên", query: "Điều kiện cấp đổi chứng chỉ thẩm tra viên an toàn giao thông?" },
+  {
+    label: "Thẩm quyền đầu tư Thủ đô",
+    query: "Hội đồng nhân dân Hà Nội có thẩm quyền gì về đầu tư công?",
+  },
+  {
+    label: "Kiểm tra ô tô nhập khẩu",
+    query: "Ô tô nhập khẩu phải kiểm tra những gì về đèn phanh?",
+  },
+  {
+    label: "Chứng chỉ thẩm tra viên",
+    query: "Điều kiện cấp đổi chứng chỉ thẩm tra viên an toàn giao thông?",
+  },
 ];
 
 let messagesInner = null;
@@ -52,7 +61,10 @@ function loadSessions() {
 }
 
 function persistSessions() {
-  localStorage.setItem(STORAGE_CHATS, JSON.stringify(chatSessions.slice(0, 50)));
+  localStorage.setItem(
+    STORAGE_CHATS,
+    JSON.stringify(chatSessions.slice(0, 50)),
+  );
 }
 
 function chatTitle(messages) {
@@ -108,16 +120,8 @@ function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function todayIsoDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function setDefaultFilters() {
-  asOfInput.value = todayIsoDate();
+  asOfInput.value = "";
   docNumberInput.value = "";
   topKInput.value = 5;
 }
@@ -131,7 +135,7 @@ function getFilters() {
 }
 
 function applyFilters(filters) {
-  asOfInput.value = filters?.as_of || todayIsoDate();
+  asOfInput.value = filters?.as_of ?? "";
   docNumberInput.value = filters?.document_number || "";
   topKInput.value = filters?.top_k || 5;
 }
@@ -445,7 +449,10 @@ async function sendMessage(text) {
       if (event.type === "done") {
         fullAnswer = event.answer || fullAnswer;
         if (!assistantBody) assistantBody = beginAssistantStream();
-        updateAssistantStream(assistantBody, fullAnswer || "(Không có nội dung trả lời)");
+        updateAssistantStream(
+          assistantBody,
+          fullAnswer || "(Không có nội dung trả lời)",
+        );
         if (sources?.length) {
           attachSources(assistantBody, sources);
           const last = currentMessages[currentMessages.length - 1];
@@ -457,7 +464,10 @@ async function sendMessage(text) {
     if (streamError) {
       if (!assistantBody) assistantBody = beginAssistantStream();
       setError(streamError);
-      updateAssistantStream(assistantBody, "Không thể trả lời. Vui lòng thử lại.");
+      updateAssistantStream(
+        assistantBody,
+        "Không thể trả lời. Vui lòng thử lại.",
+      );
     } else if (!assistantBody) {
       removeTypingIndicator();
       createMessage("assistant", "Không có nội dung trả lời.");
@@ -529,10 +539,16 @@ searchInput.addEventListener("input", () => {
   renderRecents();
 });
 
-document.getElementById("sidebar-toggle").addEventListener("click", toggleSidebar);
-document.getElementById("topbar-sidebar-btn").addEventListener("click", toggleSidebar);
+document
+  .getElementById("sidebar-toggle")
+  .addEventListener("click", toggleSidebar);
+document
+  .getElementById("topbar-sidebar-btn")
+  .addEventListener("click", toggleSidebar);
 document.getElementById("new-chat-btn").addEventListener("click", resetChat);
-document.getElementById("search-chats-btn").addEventListener("click", toggleSearch);
+document
+  .getElementById("search-chats-btn")
+  .addEventListener("click", toggleSearch);
 loadSessions();
 setDefaultFilters();
 setSidebarCollapsed(localStorage.getItem(STORAGE_SIDEBAR) === "1");
